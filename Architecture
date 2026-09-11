@@ -1,0 +1,348 @@
+# Architecture
+
+## 1. General Approach
+
+The application is divided into separate parts so that the layout calculation is not directly tied to React.
+
+The main components are:
+
+* Ad Specification
+* Surface Profiles
+* Layout Resolver
+* Resolved Layout
+* DOM Renderer
+* React Application
+
+The resolver receives the ad specification and surface information as input instead of using a separate hardcoded layout for every screen.
+
+---
+
+## 2. Ad Specification
+
+File:
+
+```text
+src/spec.ts
+```
+
+The ad specification describes the content of the advertisement.
+
+Each element contains information such as:
+
+* `id`
+* `type`
+* `role`
+* `priority`
+* `content`
+* `minWidth`
+* `minHeight`
+
+The advertisement specification is defined once and reused across all supported surfaces.
+
+It does not contain fixed coordinates for individual surfaces. This allows the same advertisement content to adapt to different screen sizes.
+
+---
+
+## 3. Surface Profiles
+
+File:
+
+```text
+src/surfaces.ts
+```
+
+Surface profiles describe the environment where the advertisement needs to be displayed.
+
+The project includes:
+
+* Mobile Portrait
+* Mobile Landscape
+* Broadcast Lower Third
+* Square Retail Kiosk
+* Compact Banner
+
+A surface contains information such as:
+
+* Width
+* Height
+* Safe area
+* Minimum tap target
+* Minimum text size
+* Viewing distance
+* Touch-only behavior
+
+The resolver uses these values when calculating the layout.
+
+---
+
+## 4. Layout Resolver
+
+File:
+
+```text
+src/resolver.ts
+```
+
+The resolver is the main part of the project.
+
+It receives the advertisement specification and the selected surface profile and produces a resolved layout.
+
+The resolver is implemented as TypeScript logic and is independent of React components.
+
+This separation allows the same layout calculation logic to potentially be used with different rendering technologies.
+
+---
+
+## 5. Resolution Process
+
+The resolver uses a priority-based greedy placement approach.
+
+### Step 1: Read the Inputs
+
+The resolver receives the advertisement specification and selected surface profile.
+
+### Step 2: Determine Available Space
+
+The surface dimensions and safe-area constraints are used to determine the usable area.
+
+### Step 3: Process Element Priorities
+
+Elements are processed according to their priority.
+
+The current advertisement uses priorities from 1 to 3.
+
+A lower priority number represents more important content.
+
+### Step 4: Check Element Size
+
+The resolver considers the minimum width and minimum height specified for each element.
+
+For example, the CTA has a minimum size of:
+
+```text
+100 × 44
+```
+
+### Step 5: Find a Valid Position
+
+The resolver searches for a position where the element can fit inside the available surface area.
+
+The element must remain within the surface boundaries.
+
+### Step 6: Check for Overlap
+
+The candidate position is compared with elements that have already been placed.
+
+If the candidate overlaps another element, that position is rejected.
+
+### Step 7: Place or Drop the Element
+
+If a valid position is found, the element is added to the resolved layout.
+
+If no valid position can be found, the element is added to the dropped list.
+
+The application also records the reason why the element was dropped.
+
+---
+
+## 6. Constraint Handling
+
+The resolver considers the constraints provided by the selected surface and the advertisement elements.
+
+Element minimum sizes currently include:
+
+| Element       | Minimum Width | Minimum Height |
+| ------------- | ------------: | -------------: |
+| Headline      |         180px |           50px |
+| Product Image |         140px |          140px |
+| CTA           |         100px |           44px |
+| Logo          |          60px |           40px |
+| Price         |          80px |           40px |
+
+The resolver also considers surface-level constraints such as safe areas and minimum tap targets.
+
+This prevents elements from being placed outside the usable surface or in invalid overlapping positions.
+
+---
+
+## 7. Degradation
+
+The Compact Banner is intentionally used to demonstrate degradation because it provides much less available space than the other surfaces.
+
+The current test result is:
+
+```text
+Compact Banner
+300 × 120
+
+Placed: 2
+Dropped: 3
+```
+
+Instead of allowing elements to overlap or extend outside the banner, the resolver drops elements that cannot satisfy the constraints.
+
+The application displays information about dropped elements, including:
+
+* Element ID
+* Priority
+* Reason for dropping
+
+This makes the resolver's decisions easier to understand and debug.
+
+---
+
+## 8. Rendering
+
+File:
+
+```text
+src/render-dom.ts
+```
+
+The renderer takes the resolved layout and displays it using DOM and CSS.
+
+The renderer does not decide which elements should be dropped.
+
+The layout decision has already been made by the resolver.
+
+This keeps layout calculation separate from visual rendering.
+
+---
+
+## 9. React Application
+
+File:
+
+```text
+src/App.tsx
+```
+
+The React application is responsible for the demonstration interface.
+
+It allows the user to:
+
+* Select a surface
+* View the resolved advertisement
+* See the number of placed elements
+* See the number of dropped elements
+* View surface constraints
+* View priority and degradation information
+
+When the selected surface changes, the same advertisement specification is resolved again using the new surface constraints.
+
+---
+
+## 10. Type Safety
+
+The project uses TypeScript to define the main data structures.
+
+Element types are restricted to supported values:
+
+```ts
+type ElementType = "text" | "image" | "button";
+```
+
+Element roles are also represented using TypeScript union types.
+
+The advertisement specification uses the `AdSpec` interface, while individual elements use the `AdElement` interface.
+
+Runtime validation is also provided through the `defineAd()` function.
+
+The validation checks:
+
+* At least one element exists
+* Element IDs are unique
+* Priority values are positive
+* Minimum width values are valid
+* Minimum height values are valid
+
+This helps catch invalid advertisement specifications before they are processed by the resolver.
+
+---
+
+## 11. Separation of Responsibilities
+
+Each part of the application has a specific responsibility.
+
+### `spec.ts`
+
+Defines the advertisement content and its properties.
+
+### `surfaces.ts`
+
+Defines the supported surfaces and their constraints.
+
+### `resolver.ts`
+
+Calculates where elements should be placed and which elements need to be dropped.
+
+### `render-dom.ts`
+
+Displays the resolved layout using DOM and CSS.
+
+### `App.tsx`
+
+Provides the interactive demonstration interface.
+
+This separation makes the project easier to maintain and test.
+
+---
+
+## 12. Adding a New Surface
+
+A new surface can be added by creating a new surface profile with its dimensions and constraints.
+
+The existing resolver can then process the new surface using the same advertisement specification.
+
+The resolver does not require a separate hardcoded layout for every named surface.
+
+This makes the architecture more flexible when additional screen sizes or environments are introduced.
+
+---
+
+## 13. Current Limitations
+
+The current implementation is intentionally simple and focuses on demonstrating the core adaptive layout concept.
+
+The resolver uses a greedy placement strategy rather than a full mathematical optimization algorithm.
+
+The project also does not currently perform actual browser-based text measurement before deciding whether text will fit.
+
+Other limitations include:
+
+* Limited element types
+* Basic image handling
+* No animation
+* No Canvas renderer
+* No globally optimal placement search
+
+These could be improved in future versions.
+
+---
+
+## 14. Future Improvements
+
+Possible future improvements include:
+
+* More advanced constraint-solving strategies
+* Browser-based text measurement
+* Automatic font-size adjustment
+* Better image cropping and scaling
+* Additional element types
+* Canvas rendering support
+* Animation support
+* Accessibility improvements
+* More advanced placement optimization
+* Support for additional unknown surfaces
+
+---
+
+## 15. Conclusion
+
+The architecture separates advertisement definition, surface constraints, layout calculation, and rendering.
+
+The same advertisement specification can therefore be processed for different surfaces without creating a separate hardcoded layout for each one.
+
+The resolver is the central component responsible for producing a valid layout while respecting available space, element priorities, minimum dimensions, safe areas, and overlap constraints.
+
+This structure also makes the project easier to extend, test, and maintain.
